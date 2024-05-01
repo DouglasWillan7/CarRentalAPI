@@ -1,0 +1,28 @@
+
+bin/
+obj/
+
+
+*.pdb
+*.user
+
+data/.minio.sys/
+.vscode/
+.vs/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln.docstates
+*.sln.ide
+
+
+*.nupkg
+
+*.nupkg.sha512
+
+# Ignora arquivos de cache do Rider
+.idea/
+
+# Ignora arquivos temporários
+*.DS_Store
+Thumbs.db

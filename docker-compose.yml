@@ -1,0 +1,112 @@
+version: '3.8'
+
+networks:
+  shared-network:
+    driver: bridge
+
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    volumes:
+      - ./data:/data
+    ports:
+      - 9000:9000
+      - 9001:9001
+    environment:
+      MINIO_ROOT_USER: 'minio_user'
+      MINIO_ROOT_PASSWORD: 'minio_password'
+      MINIO_ADDRESS: ':9000'
+      MINIO_CONSOLE_ADDRESS: ':9001'
+    command: minio server /data
+    networks:
+      - shared-network
+
+  db:
+    image: postgres
+    container_name: postgres
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: minhaSenha
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - shared-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+  
+  app_api:
+    image: rental-api
+    container_name: rental-api
+    build:
+      context: .
+      dockerfile: src/DW.Rental.Api/Dockerfile
+    ports:
+      - "5001:5001"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:5001
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DbContextSettings__ConnectionString: User ID=postgres;Password=minhaSenha;Host=postgres;Port=5432;Database=postgres;Pooling=true;
+      BucketSettings__Endpoint: minio
+      BucketSettings__Port: 9000
+      BucketSettings__AccessKey: minio_user
+      BucketSettings__SecretKey: minio_password
+      BucketSettings__BucketName: deliverymanphotos
+      RabbitSettings__Endpoint: rabbitmq
+      RabbitSettings__Port: 5672
+      RabbitSettings__Username: guest
+      RabbitSettings__Password: guest
+    networks:
+      - shared-network
+
+  app_consumer:
+    image: rental-consumer
+    container_name: rental-consumer
+    build:
+      context: .
+      dockerfile: src/Dw.Rental.Consumer/Dockerfile
+    ports:
+      - "5002:5002"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_started
+    environment:
+      ASPNETCORE_URLS: http://+:5002
+      ASPNETCORE_ENVIRONMENT: "Development"
+      DbContextSettings__ConnectionString: User ID=postgres;Password=minhaSenha;Host=postgres;Port=5432;Database=postgres;Pooling=true;
+      RabbitSettings__Endpoint: rabbitmq
+      RabbitSettings__Port: 5672
+      RabbitSettings__Username: guest
+      RabbitSettings__Password: guest
+    networks:
+      - shared-network
+      
+volumes:
+  db_data:
